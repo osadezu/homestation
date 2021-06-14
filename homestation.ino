@@ -15,7 +15,6 @@
  * #define WIFI_PASSWORD "Pa$$w0rd"
  */
 #define HTTP_REST_PORT 8080 // Port for REST server
-
 #define DHTPIN 4            // Digital pin connected to the DHT sensor
 #define DHTTYPE DHT22       // DHT 22 (AM2302)
 
@@ -26,6 +25,8 @@ WiFiServer server(HTTP_REST_PORT); // Initialize server
 DHT dht(DHTPIN, DHTTYPE);          // Initialize sensor
 
 void setup() {
+  pinMode(LED_BUILTIN, OUTPUT);     // Built-in LED used as client connection indicator
+  
   Serial.begin(115200);
   Serial.println();
 
@@ -41,7 +42,9 @@ void setup() {
   Serial.println(F(" Connected!"));
 
   server.begin();
-  Serial.printf("Web server started, open %s in a web browser\n", WiFi.localIP().toString().c_str());
+  Serial.printf("Web server started, open %s:%u in a web browser\n", WiFi.localIP().toString().c_str(),server.port());
+
+  digitalWrite(LED_BUILTIN, HIGH);  // Turn the LED off by making the voltage HIGH
 }
 
 String prepareHtmlPage(float h, float t)
@@ -51,7 +54,7 @@ String prepareHtmlPage(float h, float t)
   htmlPage = F("HTTP/1.1 200 OK\r\n"
                "Content-Type: text/html\r\n"
                "Connection: close\r\n"   // the connection will be closed after completion of the response
-               "Refresh: 10\r\n"         // refresh the page automatically every 10 seconds
+//               "Refresh: 10\r\n"         // refresh the page automatically every 10 seconds
                "\r\n"
                "<!DOCTYPE HTML>"
                "<html>"
@@ -76,11 +79,14 @@ void loop() {
     Serial.println(F("Failed to read from DHT sensor!"));
     return;
   }
-  
+  Serial.printf("Read H:%f and T:%f from DHT sensor.\n", h, t); // Preview sensor read values.
+
   // wait for a client (web browser) to connect
+  Serial.println(F("\n[Waiting for Client]"));
   if (client)
   {
     Serial.println(F("\n[Client connected]"));
+    digitalWrite(LED_BUILTIN, LOW);   // Turn the LED on (Note that LOW is the voltage level
     while (client.connected())
     {
       // read line by line what the client (web browser) is requesting
@@ -107,5 +113,6 @@ void loop() {
     // close the connection:
     client.stop();
     Serial.println(F("[Client disconnected]"));
+    digitalWrite(LED_BUILTIN, HIGH);  // Turn the LED off by making the voltage HIGH
   }
 }
