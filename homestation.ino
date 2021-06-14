@@ -6,7 +6,7 @@
  *    Temp Sensor: DHT-22 (AM2302)
  */
 
-#include <ESP8266WiFi.h>
+#include <ESP8266WebServer.h>
 #include "DHT.h"            // Adafruit DHT Sensor Library: https://github.com/adafruit/DHT-sensor-library
 
 #include "localSettings.h"  // Settings for local WiFi access, hidden from public repository
@@ -21,8 +21,9 @@
 const char* ssid     = WIFI_SSID;
 const char* password = WIFI_PASSWORD;
 
-WiFiServer server(HTTP_REST_PORT); // Initialize server
+ESP8266WebServer server(HTTP_REST_PORT); // Initialize server
 DHT dht(DHTPIN, DHTTYPE);          // Initialize sensor
+float h, t;
 
 void setup() {
   pinMode(LED_BUILTIN, OUTPUT);     // Built-in LED used as client connection indicator
@@ -31,7 +32,8 @@ void setup() {
   Serial.println();
 
   dht.begin();
-  
+
+  WiFi.mode(WIFI_STA);
   Serial.printf("Connecting to %s ", ssid);
   WiFi.begin(ssid, password);
   while (WiFi.status() != WL_CONNECTED)
@@ -41,78 +43,71 @@ void setup() {
   }
   Serial.println(F(" Connected!"));
 
+  // Set server routing
+  serverRouting();
+  // Start server
   server.begin();
-  Serial.printf("Web server started, open %s:%u in a web browser\n", WiFi.localIP().toString().c_str(),server.port());
+  Serial.printf("Web server started, open %s:%u in a web browser\n", WiFi.localIP().toString().c_str(),HTTP_REST_PORT);
 
-  digitalWrite(LED_BUILTIN, HIGH);  // Turn the LED off by making the voltage HIGH
+  digitalWrite(LED_BUILTIN, HIGH);  // Turn the LED off
 }
 
-String prepareHtmlPage(float h, float t)
+void handleRoot()
 {
-  String htmlPage;
-  htmlPage.reserve(1024);                // prevent RAM fragmentation
-  htmlPage = F("HTTP/1.1 200 OK\r\n"
-               "Content-Type: text/html\r\n"
-               "Connection: close\r\n"   // the connection will be closed after completion of the response
-//               "Refresh: 10\r\n"         // refresh the page automatically every 10 seconds
-               "\r\n"
-               "<!DOCTYPE HTML>"
-               "<html>"
-               "Humidity: ");
-  htmlPage += (int)(h+.5);               // round displayed humidity
-  htmlPage += F(" &percnt;<br>"
+  String htmlBody;
+  htmlBody.reserve(1024);                // prevent RAM fragmentation
+  htmlBody = F("Humidity: ");
+  htmlBody += (int)(h + .5);               // round displayed humidity
+  htmlBody += F(" &percnt;<br>"
                 "Temperature: ");
-  htmlPage += (int)(t+.5);               // round displayed temperature
-  htmlPage += F(" &deg;C"
-                "</html>");
-  return htmlPage;
+  htmlBody += (int)(t + .5);               // round displayed temperature
+  htmlBody += F(" &deg;C");
+  server.sendHeader("Connection", "close");
+  server.send(200, F("text/html"), htmlBody);
 }
 
-void loop() {
-  WiFiClient client = server.available();
+// Manage not found URL
+void handleNotFound() {
+  String message;
+  message.reserve(1024);
+  message += "File Not Found\n\n";
+  message += "URI: ";
+  message += server.uri();
+  message += "\nMethod: ";
+  message += (server.method() == HTTP_GET) ? "GET" : "POST";
+  message += "\nArguments: ";
+  message += server.args();
+  message += "\n";
+  for (uint8_t i = 0; i < server.args(); i++) {
+    message += " " + server.argName(i) + ": " + server.arg(i) + "\n";
+  }
+  server.send(404, "text/plain", message);
+}
 
+// Define routing
+void serverRouting() {
+  server.on("/", HTTP_GET, handleRoot);
+
+  server.on("/test", HTTP_GET, []() {
+    server.sendHeader("Connection", "close");
+    server.send(200, F("text/html"), "&quot;Hello!&quot;");
+  });
+  
+  // Set not found response
+  server.onNotFound(handleNotFound);
+}
+
+void loop(void) {
+  
   delay(2000);
-  float h = dht.readHumidity();
-  float t = dht.readTemperature();
+  h = dht.readHumidity();
+  t = dht.readTemperature();
   // Check if any reads failed and exit early (to try again).
   if (isnan(h) || isnan(t)) {
     Serial.println(F("Failed to read from DHT sensor!"));
     return;
   }
   Serial.printf("Read H:%f and T:%f from DHT sensor.\n", h, t); // Preview sensor read values.
-
-  // wait for a client (web browser) to connect
-  Serial.println(F("\n[Waiting for Client]"));
-  if (client)
-  {
-    Serial.println(F("\n[Client connected]"));
-    digitalWrite(LED_BUILTIN, LOW);   // Turn the LED on (Note that LOW is the voltage level
-    while (client.connected())
-    {
-      // read line by line what the client (web browser) is requesting
-      if (client.available())
-      {
-        String line = client.readStringUntil('\r');
-        Serial.print(line);
-        // wait for end of client's request, that is marked with an empty line
-        if (line.length() == 1 && line[0] == '\n')
-        {
-          Serial.println(F("\n[Preparing HTML]"));
-          client.println(prepareHtmlPage(h,t));
-          break;
-        }
-      }
-    }
-
-    while (client.available()) {
-      // let client finish its request
-      delay(100);
-      client.read();
-    }
-
-    // close the connection:
-    client.stop();
-    Serial.println(F("[Client disconnected]"));
-    digitalWrite(LED_BUILTIN, HIGH);  // Turn the LED off by making the voltage HIGH
-  }
+  
+  server.handleClient();
 }
