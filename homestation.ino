@@ -23,7 +23,7 @@ const char* password = WIFI_PASSWORD;
 
 ESP8266WebServer server(HTTP_REST_PORT); // Initialize server
 DHT dht(DHTPIN, DHTTYPE);          // Initialize sensor
-float h, t;
+float h, t, f;
 
 void setup() {
   pinMode(LED_BUILTIN, OUTPUT);     // Built-in LED used as client connection indicator
@@ -61,7 +61,9 @@ void handleRoot()
   htmlBody += F(" &percnt;<br>"
                 "Temperature: ");
   htmlBody += (int)(t + .5);               // round displayed temperature
-  htmlBody += F(" &deg;C");
+  htmlBody += F(" &deg;C (");
+  htmlBody += (int)(f + .5);               // round displayed temperature
+  htmlBody += F(" &deg;F)");
   server.sendHeader("Connection", "close");
   server.send(200, F("text/html"), htmlBody);
 }
@@ -102,12 +104,14 @@ void loop(void) {
   delay(2000);
   h = dht.readHumidity();
   t = dht.readTemperature();
+  f = dht.readTemperature(true);
+  
   // Check if any reads failed and exit early (to try again).
-  if (isnan(h) || isnan(t)) {
+  if (isnan(h) || isnan(t) || isnan(f)) {
     Serial.println(F("Failed to read from DHT sensor!"));
     return;
   }
-  Serial.printf("Read H:%f and T:%f from DHT sensor.\n", h, t); // Preview sensor read values.
+  Serial.printf("Read H:%f, T:%f and F:%f from DHT sensor.\n", h, t, f); // Preview sensor read values.
   
   server.handleClient();
 }
