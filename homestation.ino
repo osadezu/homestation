@@ -17,6 +17,9 @@
  * #define WIFI_SSID     "Network"
  * #define WIFI_PASSWORD "Pa$$w0rd"
  */
+
+#include "Room.h"   // Room data structure.
+ 
 #define HTTP_REST_PORT 8080   // Port for REST server
 #define DHTPIN 13             // Digital pin connected to the DHT sensor
 #define SDAPIN 4              // I2C SDA pin
@@ -32,11 +35,23 @@ SerLCD lcd;                              // Initialize LCD object
 ESP8266WebServer server(HTTP_REST_PORT); // Initialize server
 DHT dht(DHTPIN, DHTTYPE);                // Initialize sensor
 
-float h, t, f; // Variables to store Temp and Humidity values.
-bool hadClient = false; // Flag for flow control when client detected.
+// Structure to hold room data.
+struct Room {
+  
+  // TO-DO: char name[]; // Room name for HomeKit
+  float hum; // Humidity
+  float tempC; // Celsius temperature
+  float tempF; // Fahrenheit temperature
+  char conditions[16]; // Humidity and temperature string for display
+} room;
+
+//float h, t, f; // Variables to store Temp and Humidity values
+bool hadClient = false; // Flag for flow control when client detected
+
+
 
 /////////////////////////////////////////
-// Server Functions 
+//  HTTP Server Functions               
 /////////////////////////////////////////
 
 void handleRoot()
@@ -44,12 +59,12 @@ void handleRoot()
   String htmlBody;
   htmlBody.reserve(1024);                // prevent RAM fragmentation
   htmlBody = F("Humidity: ");
-  htmlBody += (int)(h + .5);               // round displayed humidity
+  htmlBody += (int)(room.hum + .5);               // round displayed humidity
   htmlBody += F(" &percnt;<br>"
                 "Temperature: ");
-  htmlBody += (int)(t + .5);               // round displayed temperature
+  htmlBody += (int)(room.tempC + .5);               // round displayed temperature
   htmlBody += F(" &deg;C (");
-  htmlBody += (int)(f + .5);               // round displayed temperature
+  htmlBody += (int)(room.tempF + .5);               // round displayed temperature
   htmlBody += F(" &deg;F)");
   server.sendHeader("Connection", "close");
   server.send(200, F("text/html"), htmlBody);
@@ -84,8 +99,10 @@ void serverRouting() {
   server.onNotFound(handleNotFound);
 }
 
+
+
 /////////////////////////////////////////
-// Display Functions 
+//   Display Functions 
 /////////////////////////////////////////
 
 // Clear display (and optionally turn off backlight).
@@ -112,8 +129,10 @@ void displayRow(char row, char *message) {
   }
 }
 
+
+
 /////////////////////////////////////////
-// Setup
+//   Setup
 /////////////////////////////////////////
 
 void setup() {
@@ -166,29 +185,31 @@ void setup() {
   digitalWrite(LED_BUILTIN, HIGH);  // Turn the LED off
 }
 
+
+
 /////////////////////////////////////////
-// Loop
+//   Loop
 /////////////////////////////////////////
 
 void loop(void) {
 
   delay(2000);
-  h = dht.readHumidity();
-  t = dht.readTemperature();
-  f = dht.readTemperature(true);
+  room.hum = dht.readHumidity();
+  room.tempC = dht.readTemperature(); // Celsius
+  room.tempF = dht.readTemperature(true); // Fahrenheit
   
   // Check if any reads failed and exit early (to try again).
-  if (isnan(h) || isnan(t) || isnan(f)) {
+  if (isnan(room.hum) || isnan(room.tempC) || isnan(room.tempF)) {
     Serial.println(F("Failed to read from DHT sensor!"));
     return;
   }
-  Serial.printf("Read H:%f, T:%f and F:%f from DHT sensor.\n", h, t, f); // Preview sensor read values.
+  Serial.printf("Read H:%f, T:%f and F:%f from DHT sensor.\n", room.hum, room.tempC, room.tempF); // Preview sensor read values.
 
   displayRow(1,"                "); // Clear bottom row
   lcd.setCursor(0, 1); // Move cursor to beginning of row 1
-  lcd.printf("%d%% %d", (int)(h + .5), (int)(t + .5)); // Display sensor values.
+  lcd.printf("%d%% %d", (int)(room.hum + .5), (int)(room.tempC + .5)); // Display sensor values.
   lcd.write(0xDF); // Degree symbol
-  lcd.printf("C(%d", (int)(f + .5)); // Display sensor values.
+  lcd.printf("C(%d", (int)(room.tempF + .5)); // Display sensor values.
   lcd.write(0xDF); // Degree symbol
   lcd.write("F)");
   
