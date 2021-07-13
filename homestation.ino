@@ -9,6 +9,7 @@
 
 #include <ESP8266WebServer.h>
 #include <Wire.h>            // I2C to handle LCD
+#include <SerLCD.h>          // Sparkfun LCD library
 #include <DHT.h>             // Adafruit DHT Sensor Library: https://github.com/adafruit/DHT-sensor-library
 
 #include "localSettings.h"   // Settings for local WiFi access, hidden from public repository
@@ -27,6 +28,7 @@
 const char* ssid     = WIFI_SSID;
 const char* password = WIFI_PASSWORD;
 
+SerLCD lcd;                              // Initialize LCD object
 ESP8266WebServer server(HTTP_REST_PORT); // Initialize server
 DHT dht(DHTPIN, DHTTYPE);                // Initialize sensor
 
@@ -86,49 +88,28 @@ void serverRouting() {
 // Display Functions 
 /////////////////////////////////////////
 
-// Set Display backlight color
-void displayRGB(char r, char g, char b) {
-  Wire.beginTransmission(DISPLAY_ADDRESS);
-  Wire.write('|'); // Put LCD into setting mode
-  Wire.write('+'); // Set RGB mode
-  Wire.write(r); // R byte
-  Wire.write(g); // G byte
-  Wire.write(b); // B byte
-  Wire.endTransmission(); 
-}
-
 // Clear display (and optionally turn off backlight).
 void displayClear(bool lightOff = true) {
-  Wire.beginTransmission(DISPLAY_ADDRESS);
-  Wire.write('|'); // Put LCD into setting mode
-  Wire.write('-'); // Send clear display command
+  
+  lcd.clear();                      // Clear screen, cursor to home
   if (lightOff == true) {
-    Wire.write('|'); // Put LCD into setting mode
-    Wire.write('+'); // Set RGB mode
-    Wire.write(0); // R byte
-    Wire.write(0); // G byte
-    Wire.write(0); // B byte
+    lcd.setFastBacklight(0x000000); // Backlight Off
   }
-  Wire.endTransmission();
 }
 
 // Clear selected row and display message (0: top row, 1: bottom row)
 void displayRow(char row, char *message) {
-  Wire.beginTransmission(DISPLAY_ADDRESS);
-  Wire.write(254); // Special Command
+    
+  lcd.setCursor(0, row);  // Move cursor to beginning of given row
   
-  if (row == 0) {
-    Wire.write(128); // Move cursor to L0 S0
-  } else if (row == 1) {
-    Wire.write(128 + 64); // Move cursor to L1 S0
-  }
-  Wire.print(message);
+  ////// TO-DO: Handle case where message > DISPLAY_LENGTH //////
+  
+  lcd.write(message);
   if (strlen(message) < DISPLAY_LENGTH) {
     for (int i = strlen(message); i < DISPLAY_LENGTH; i++) {
-      Wire.print(" ");
+      lcd.write(" ");
     }
   }
-  Wire.endTransmission();
 }
 
 /////////////////////////////////////////
@@ -141,8 +122,11 @@ void setup() {
   Serial.begin(115200);
   Serial.println();
 
-  Wire.begin(SDAPIN, SCLPIN); // Initialize I2C for LCD display
-  displayClear();
+  // Initialize LCD display on I2C
+  Wire.begin(SDAPIN, SCLPIN); 
+  lcd.begin(Wire, DISPLAY_ADDRESS); 
+  lcd.clear();                    // Clear screen, cursor to home
+  lcd.setFastBacklight(0x000000); // Backlight Off
   
   dht.begin();
 
@@ -150,26 +134,23 @@ void setup() {
   
   Serial.printf("Connecting to %s ", ssid);
   displayRow(0, "Connecting...");
-  displayRGB(0, 0, 0x40); // Backlight to blue
+  lcd.setFastBacklight(0x000040);; // Backlight to blue
   WiFi.begin(ssid, password);
   
   char blinker = 0;
-  while (WiFi.status() != WL_CONNECTED)
-  {
-    delay(500);
-    Serial.print(".");
-    Wire.beginTransmission(DISPLAY_ADDRESS);
-    Wire.write(254); // Special Command
-    Wire.write(128 + 14); // Move cursor to L0 S14
-    Wire.endTransmission();
-    (blinker % 2 == 0) ? Wire.write(0xBC) : Wire.write(" ");
-    blinker++;
+  while (WiFi.status() != WL_CONNECTED) {
     
+    delay(750);
+    Serial.print(".");
+    
+    lcd.setCursor(14, 0); // Move cursor to Col 14 Row 0
+    (blinker % 2 == 0) ? lcd.write(0xBC) : lcd.write(" "); // Happy wait
+    blinker++;
   }
   
   Serial.println(F(" Connected!"));
   displayRow(0, "Connected!");
-  displayRGB(0, 0, 0); // Backlight off
+  lcd.setFastBacklight(0x000000); // Backlight Off
 
   // Set server routing
   serverRouting();
@@ -178,13 +159,10 @@ void setup() {
   server.begin();
   Serial.printf("Web server started, open %s:%u in a web browser\n", WiFi.localIP().toString().c_str(),HTTP_REST_PORT);
 
-  Wire.beginTransmission(DISPLAY_ADDRESS);
-  Wire.write(254); // Special Command
-  Wire.write(128); // Move cursor to L0 S0
-  Wire.write(0x40); // @
-  Wire.printf("%s", WiFi.localIP().toString().c_str()); //Display IP
-  Wire.endTransmission();
-
+  lcd.setCursor(0, 0); // Move cursor to beginning of Row 0
+  lcd.write(0x40); // @
+  lcd.printf("%s", WiFi.localIP().toString().c_str()); //Display IP
+  
   digitalWrite(LED_BUILTIN, HIGH);  // Turn the LED off
 }
 
@@ -206,16 +184,13 @@ void loop(void) {
   }
   Serial.printf("Read H:%f, T:%f and F:%f from DHT sensor.\n", h, t, f); // Preview sensor read values.
 
-  displayRow(1," "); // Clear bottom row
-  Wire.beginTransmission(DISPLAY_ADDRESS);
-  Wire.write(254); // Special Command
-  Wire.write(128 + 64); // Move cursor to L1 S0
-  Wire.printf("%d%% %d", (int)(h + .5), (int)(t + .5)); // Display sensor values.
-  Wire.write(0xDF); // Degree symbol
-  Wire.printf("C(%d", (int)(f + .5)); // Display sensor values.
-  Wire.write(0xDF); // Degree symbol
-  Wire.print("F)");
-  Wire.endTransmission();
+  displayRow(1,"                "); // Clear bottom row
+  lcd.setCursor(0, 1); // Move cursor to beginning of row 1
+  lcd.printf("%d%% %d", (int)(h + .5), (int)(t + .5)); // Display sensor values.
+  lcd.write(0xDF); // Degree symbol
+  lcd.printf("C(%d", (int)(f + .5)); // Display sensor values.
+  lcd.write(0xDF); // Degree symbol
+  lcd.write("F)");
   
   server.handleClient();
 
@@ -224,7 +199,7 @@ void loop(void) {
     digitalWrite(LED_BUILTIN, LOW);  // Turn the LED on
 
     displayRow(0, "Client Connected");
-    displayRGB(0, 0x40, 0); // Backlight to Green
+    lcd.setFastBacklight(0x004000); // Backlight to Green
 
     hadClient = true;
     
@@ -233,7 +208,7 @@ void loop(void) {
     digitalWrite(LED_BUILTIN, HIGH);  // Turn the LED off
     
     displayRow(0, "Client left");
-    displayRGB(0, 0, 0); // Backlight off
+    lcd.setFastBacklight(0x000000); // Backlight Off
 
     hadClient = false;
   }
