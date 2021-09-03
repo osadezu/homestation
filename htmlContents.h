@@ -10,7 +10,7 @@ const char HTML_ROOT[] PROGMEM = R"=-=(
     </head>
     <body>
 
-      <h1>Conditions at {{TKN_RM_LABEL}}:</h1>
+      <h1>Conditions in {{TKN_RM_LABEL}}:</h1>
       <p>Humidity: {{TKN_HUMIDITY}} &percnt;<br>
          Temperature: {{TKN_TEMP_C}}&deg;C ({{TKN_TEMP_F}}&deg;F)</p>
 

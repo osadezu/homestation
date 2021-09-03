@@ -7,6 +7,9 @@
  *    LCD: Sparkfun 16x2 SerLCD
  */
 
+#define DEBUG true  // Make false to disable Serial monitor debug messages.
+#define DEBUG_SERIAL if(DEBUG)Serial
+
 #include <ESP8266WiFi.h>
 #include <ESP8266WebServer.h>
 #include <Wire.h>             // I2C to handle LCD
@@ -146,7 +149,7 @@ bool getConditions() {
   // Check if any reads failed.
   if (isnan(room.hum) || isnan(room.tempC) || isnan(room.tempF)) {
 
-    Serial.println(F("Failed to read from DHT sensor!"));
+    DEBUG_SERIAL.println(F("Failed to read from DHT sensor!"));
     return false; // Read failed.
 
   } else {
@@ -154,7 +157,7 @@ bool getConditions() {
     room.conditionsRead = now;
 
     // Preview sensor read values.
-    Serial.printf("Read H:%f, T:%f and F:%f from DHT sensor on %d.\n", room.hum, room.tempC, room.tempF, now);
+    DEBUG_SERIAL.printf("Read H:%f, T:%f and F:%f from DHT sensor on %d.\n", room.hum, room.tempC, room.tempF, now);
 
     // TODO: Move following display code out of this function.
     displayRow(1,"                ");                                     // Clear bottom row
@@ -180,8 +183,8 @@ void setup() {
   pinMode(LED_BUILTIN, OUTPUT);     // Built-in LED used as client connection indicator
   strcpy(room.label, ROOM_NAME);    // Current implementation room
 
-  Serial.begin(9600);
-  Serial.println();
+  DEBUG_SERIAL.begin(9600);
+  DEBUG_SERIAL.println();
 
   // Initialize LCD display on I2C
   Wire.begin(SDAPIN, SCLPIN);
@@ -194,7 +197,7 @@ void setup() {
 
   WiFi.mode(WIFI_STA);
 
-  Serial.printf("Connecting to %s ", ssid);
+  DEBUG_SERIAL.printf("Connecting to %s ", ssid);
   displayRow(0, "Connecting...");
   lcd.setFastBacklight(0x000040);; // Backlight to blue
   WiFi.begin(ssid, password);
@@ -203,14 +206,14 @@ void setup() {
   while (WiFi.status() != WL_CONNECTED) {
 
     delay(750);
-    Serial.print(".");
+    DEBUG_SERIAL.print(".");
 
     lcd.setCursor(14, 0);                                  // Move cursor to Col 14 Row 0
     (blinker % 2 == 0) ? lcd.write(0xBC) : lcd.write(" ");  // Happy wait
     blinker++;
   }
 
-  Serial.println(F(" Connected!"));
+  DEBUG_SERIAL.println(F(" Connected!"));
   displayRow(0, "Connected!");
   lcd.setFastBacklight(0x000000); // Backlight Off
 
@@ -222,7 +225,7 @@ void setup() {
 
   // Start server
   server.begin();
-  Serial.printf("Web server started, open %s:%u in a web browser\n", WiFi.localIP().toString().c_str(),HTTP_REST_PORT);
+  DEBUG_SERIAL.printf("Web server started, open %s:%u in a web browser\n", WiFi.localIP().toString().c_str(),HTTP_REST_PORT);
 
   lcd.setCursor(0, 0); // Move cursor to beginning of Row 0
   lcd.write(0x40); // @
@@ -243,8 +246,8 @@ void loop(void) {
 
   server.handleClient();
 
-  if (server.client() && hadClient) {
-    Serial.println("Client connected!");
+  if (server.client() && !hadClient) {
+    DEBUG_SERIAL.println("Client connected!");
     digitalWrite(LED_BUILTIN, LOW);  // Turn the LED on
 
     displayRow(0, "Client Connected");
@@ -252,8 +255,8 @@ void loop(void) {
 
     hadClient = true;
 
-  } else if (hadClient) {
-    Serial.println("Client disconnected.");
+  } else if (!server.client() && hadClient) {
+    DEBUG_SERIAL.println("Client disconnected.");
     digitalWrite(LED_BUILTIN, HIGH);  // Turn the LED off
 
     displayRow(0, "Client left");
