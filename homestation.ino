@@ -7,7 +7,7 @@
  *    LCD: Sparkfun 16x2 SerLCD
  */
 
-#define DEBUG true  // Make false to disable Serial monitor debug messages.
+#define DEBUG false  // Make false to disable Serial monitor debug messages.
 #define DEBUG_SERIAL if(DEBUG)Serial
 
 #include <ESP8266WiFi.h>
