@@ -12,6 +12,7 @@
 
 #include <ESP8266WiFi.h>
 #include <ESP8266WebServer.h>
+#include <ESP8266HTTPClient.h>
 #include <Wire.h>             // I2C to handle LCD
 #include <SerLCD.h>           // Sparkfun LCD library
 #include <DHT.h>              // Adafruit DHT Sensor Library: https://github.com/adafruit/DHT-sensor-library
